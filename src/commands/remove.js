@@ -1,4 +1,3 @@
-// /remove @user <amount>  — Administrators or staff role
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../database');
 const { canManage } = require('../utils/permissions');
@@ -27,7 +26,6 @@ module.exports = {
       return interaction.reply({ content: `${user} has no spending recorded.`, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
     }
 
-    // If they asked for more than the user had, the total just floors at RM 0.00
     const note =
       result.removed < cents
         ? ` (their total was lower than ${db.formatRM(cents)}, so it was set to RM 0.00 and they were removed from the leaderboard)`

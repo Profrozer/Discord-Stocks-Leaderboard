@@ -1,4 +1,3 @@
-// /leaderboard — paginated embed; button clicks are handled in index.js
 const { SlashCommandBuilder } = require('discord.js');
 const { buildLeaderboard } = require('../utils/leaderboardView');
 
@@ -9,7 +8,7 @@ module.exports = {
     .setDMPermission(false),
 
   async execute(interaction) {
-    await interaction.deferReply(); // user fetching can take a moment
+    await interaction.deferReply();
     await interaction.editReply(await buildLeaderboard(interaction.client, 0, interaction.guild));
   },
 };

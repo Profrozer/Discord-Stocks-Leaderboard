@@ -1,4 +1,3 @@
-// Shared check for /add and /remove: Administrators OR members with STAFF_ROLE_ID
 const { PermissionFlagsBits } = require('discord.js');
 
 function canManage(interaction) {

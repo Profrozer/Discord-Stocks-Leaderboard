@@ -1,6 +1,3 @@
-// Keeps the bot's "About Me" (its Developer Portal description) up to date with its uptime,
-// e.g. "Shop leaderboard bot. Running for 3h 12m (since 24 Nov, 10:04 am)".
-// Updated every 5 minutes to stay well clear of Discord rate limits.
 const { formatUptime } = require('./presence');
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -24,7 +21,6 @@ async function updateBio(client) {
     running = true;
     try {
         const up = formatUptime(Date.now() - client.readyTimestamp);
-        // Discord limits the description to 400 characters
         const description = `${PREFIX()} 24/7 ${up}`;
         await client.application.edit({ description });
     } catch (err) {
@@ -34,13 +30,10 @@ async function updateBio(client) {
     }
 }
 
-// Called on Ctrl+C / pm2 stop so the bio doesn't keep claiming "Running for ..." while offline
 async function setOfflineBio(client) {
     try {
         await client.application.edit({ description: `${PREFIX()} Currently offline.`.slice(0, 400) });
-    } catch {
-        /* ignore */
-    }
+    } catch {}
 }
 
 function startBio(client) {

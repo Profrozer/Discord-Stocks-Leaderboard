@@ -1,5 +1,3 @@
-// SQLite layer. Money is stored as integer cents to avoid floating-point errors
-// (e.g. 0.1 + 0.2 !== 0.3), then converted to RM only for display.
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
@@ -25,11 +23,9 @@ db.exec(`
   )
 `);
 
-// Bumped on every spending change so the live updater knows when a refresh is needed
 let dataVersion = 0;
 
 const stmts = {
-  // Insert user or add to their existing total in one atomic statement
   add: db.prepare(`
     INSERT INTO spending (user_id, total_cents) VALUES (@id, @cents)
     ON CONFLICT(user_id) DO UPDATE SET total_cents = total_cents + excluded.total_cents
@@ -52,25 +48,18 @@ const stmts = {
     ORDER BY total_cents DESC, user_id ASC
     LIMIT ? OFFSET ?
   `),
-  // Rank = number of users strictly ahead (same tie-break as the list) + 1
   rank: db.prepare(`
     SELECT COUNT(*) + 1 AS rank FROM spending
     WHERE total_cents > @cents OR (total_cents = @cents AND user_id < @id)
   `),
 };
 
-/** Add RM (as cents) to a user; returns their new total in cents. */
 function addSpending(userId, cents) {
   stmts.add.run({ id: userId, cents });
   dataVersion++;
   return stmts.get.get(userId).total_cents;
 }
 
-/**
- * Subtract RM (as cents) from a user. Never goes below 0; a user who hits 0 is removed
- * from the leaderboard. Returns null if the user has no record, otherwise
- * { removed, newTotal } (both in cents) — `removed` is what was actually taken off.
- */
 const removeSpending = db.transaction((userId, cents) => {
   const row = stmts.get.get(userId);
   if (!row) return null;
@@ -82,10 +71,6 @@ const removeSpending = db.transaction((userId, cents) => {
   return { removed, newTotal };
 });
 
-/**
- * Set a user's total to an exact amount (cents). Setting 0 removes them from the leaderboard.
- * Returns { previous, newTotal } in cents (previous is 0 if they had no record).
- */
 const setSpending = db.transaction((userId, cents) => {
   const row = stmts.get.get(userId);
   dataVersion++;
@@ -99,7 +84,6 @@ function getDataVersion() {
   return dataVersion;
 }
 
-// ---- Live (auto-updating) leaderboard messages ----
 function addLiveBoard(messageId, channelId, guildId) {
   stmts.liveAdd.run(messageId, channelId, guildId);
 }
@@ -128,7 +112,6 @@ function countUsers() {
   return stmts.count.get().n;
 }
 
-/** Highest total in cents (0 if empty) — used to scale the progress bars. */
 function getTopTotal() {
   return stmts.top.get().m;
 }
@@ -137,7 +120,6 @@ function getPage(page, perPage) {
   return stmts.page.all(perPage, page * perPage);
 }
 
-/** 22260 -> "RM 222.60" */
 function formatRM(cents) {
   const rm = (cents / 100).toLocaleString('en-US', {
     minimumFractionDigits: 2,

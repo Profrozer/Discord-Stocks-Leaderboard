@@ -1,4 +1,3 @@
-// /set @user <amount>  — Administrators or staff role. Sets the total to an exact amount.
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../database');
 const { canManage } = require('../utils/permissions');
@@ -7,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('set')
     .setDescription("Set a user's total spending to an exact amount (staff only)")
-    .setDefaultMemberPermissions(null) // visible to all; access is enforced in execute()
+    .setDefaultMemberPermissions(null)
     .setDMPermission(false)
     .addUserOption((o) => o.setName('user').setDescription('The customer').setRequired(true))
     .addNumberOption((o) =>

@@ -1,4 +1,3 @@
-// /live start | /live stop  — posts a leaderboard that auto-updates every minute
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../database');
 const { canManage } = require('../utils/permissions');
@@ -32,7 +31,6 @@ module.exports = {
       return interaction.reply({ content: 'Live leaderboard stopped and removed.', flags: MessageFlags.Ephemeral });
     }
 
-    // start
     if (existing.length) {
       return interaction.reply({
         content: 'This channel already has a live leaderboard. Use `/live stop` first if you want to move it.',
@@ -42,7 +40,6 @@ module.exports = {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      // Posted as a normal channel message (not an interaction reply) so it can be edited indefinitely
       const message = await interaction.channel.send(await buildLeaderboard(interaction.client, 0, interaction.guild));
       db.addLiveBoard(message.id, interaction.channelId, interaction.guildId);
       await interaction.editReply('Live leaderboard posted. It updates within a minute of any change.');

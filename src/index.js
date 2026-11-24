@@ -9,20 +9,16 @@ const { startLiveUpdater } = require('./utils/liveUpdater');
 const { startPresence } = require('./utils/presence');
 const { startBio, setOfflineBio } = require('./utils/bio');
 
-// GuildMessages lets the bot see messages. Messages that @mention the bot include their
-// content even without the privileged Message Content intent, so nothing extra to enable.
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
-// Load every command file in ./commands
 client.commands = new Collection();
 for (const file of fs.readdirSync(path.join(__dirname, 'commands')).filter((f) => f.endsWith('.js'))) {
   const command = require(path.join(__dirname, 'commands', file));
   client.commands.set(command.data.name, command);
 }
 
-// Registers slash commands every startup, so there's no separate "deploy" step to forget
 async function registerCommands() {
   const body = [...client.commands.values()].map((c) => c.data.toJSON());
   const { GUILD_ID } = process.env;
@@ -36,18 +32,16 @@ async function registerCommands() {
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag} (discord.js v${version})`);
   await registerCommands().catch((err) => console.error('[commands] Registration failed:', err.message));
-  await loadEmojis(client); // custom white button icons (Application Emojis)
-  startBio(client); // About Me: "Running for 3h 12m (since ...)"
-  startPresence(client); // green online dot + "Online for 3h 12m" status
-  startLiveUpdater(client); // refreshes /live leaderboards every minute
+  await loadEmojis(client);
+  startBio(client);
+  startPresence(client);
+  startLiveUpdater(client);
   console.log('Bot is ready.');
 });
 
-// ---- @mention the bot (just the mention, nothing else) -> show the leaderboard ----
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
 
-  // Content must be exactly "@Bot" so replies to the bot or normal chat never trigger it
   const mentionOnly = new RegExp(`^<@!?${client.user.id}>$`);
   if (!mentionOnly.test(message.content.trim())) return;
 
@@ -62,14 +56,12 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    // ---- Slash commands ----
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (command) await command.execute(interaction);
       return;
     }
 
-    // ---- Leaderboard buttons ----
     if (interaction.isButton() && interaction.customId.startsWith('lb_')) {
       const [action, pageStr] = interaction.customId.split(':');
       const page = parseInt(pageStr, 10) || 0;
@@ -88,7 +80,6 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply(await buildLeaderboard(client, page, guild));
       }
       if (action === 'lb_me') {
-        // Private (ephemeral) reply — only the clicker sees it
         const total = db.getUserTotal(interaction.user.id);
         const content =
           total === null
@@ -105,7 +96,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// On Ctrl+C / pm2 stop: mark the bio as offline, then exit cleanly
 async function shutdown() {
   await Promise.race([setOfflineBio(client), new Promise((r) => setTimeout(r, 3000))]);
   client.destroy();

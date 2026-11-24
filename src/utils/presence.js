@@ -1,5 +1,3 @@
-// Shows the bot as Online (green dot) with a status under its name, like "Online for 3h 12m".
-// Discord only allows ~5 presence updates per 20s, so it refreshes once a minute (no live seconds).
 const { ActivityType } = require('discord.js');
 
 const INTERVAL_MS = 60 * 1000;
@@ -17,7 +15,7 @@ function formatUptime(ms) {
 function updatePresence(client) {
     const up = Date.now() - (client.readyTimestamp ?? Date.now());
     client.user.setPresence({
-        status: 'idle', // the green round dot
+        status: 'idle',
         activities: [{ type: ActivityType.Custom, name: 'Custom Status', state: `🟢Alive for ${formatUptime(up)}` }],
     });
 }
