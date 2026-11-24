@@ -1,0 +1,17 @@
+{
+  "name": "shop-leaderboard-bot",
+  "version": "2.0.0",
+  "description": "Shop spending leaderboard Discord bot (RM) with image leaderboard",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "node src/deploy-commands.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.2.0",
+    "better-sqlite3": "^12.2.0",
+    "discord.js": "^14.19.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": { "node": ">=18" }
+}
