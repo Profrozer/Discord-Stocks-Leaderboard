@@ -139,6 +139,10 @@ The bot supports custom white icon emojis for its interactive buttons. The sourc
 | `/set` | `/set user:@Customer amount:500.00` | Sets exact total. Setting `0` removes them. |
 | `/remove` | `/remove user:@Customer amount:50.00` | Subtracts amount. Floored at RM 0. |
 
+### Backup Recovery
+
+Use `/restore` in Discord to recover leaderboard data from a backup. Check that the backup is the one you want before restoring, since recovery can replace current leaderboard data.
+
 ---
 
 ## Live Leaderboard
