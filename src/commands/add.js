@@ -1,3 +1,4 @@
+// /add @user <amount>  — Administrators or staff role
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../database');
 const { canManage } = require('../utils/permissions');
@@ -6,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('add')
     .setDescription("Add RM to a user's total spending (staff only)")
-    .setDefaultMemberPermissions(null)
+    .setDefaultMemberPermissions(null) // visible to all; access is enforced in execute()
     .setDMPermission(false)
     .addUserOption((o) => o.setName('user').setDescription('The customer').setRequired(true))
     .addNumberOption((o) =>

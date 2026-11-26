@@ -1,3 +1,5 @@
+// Optional manual command registration:  npm run deploy
+// (The bot also registers its commands automatically every time it starts.)
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');

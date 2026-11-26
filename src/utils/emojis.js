@@ -1,5 +1,9 @@
+// Looks up your custom button icons (Application Emojis) by name.
+// Upload them in Developer Portal -> your app -> Emojis, using EXACTLY these names:
+//   lb_prev, lb_next, lb_rank, lb_refresh
+// If one is missing, that button just shows text instead.
 const WANTED = ['lb_prev', 'lb_next', 'lb_rank', 'lb_refresh'];
-const cache = new Map();
+const cache = new Map(); // name -> id
 
 async function loadEmojis(client) {
   cache.clear();

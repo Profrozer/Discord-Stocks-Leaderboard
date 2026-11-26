@@ -1,24 +1,42 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { Client, Collection, GatewayIntentBits, MessageFlags, Routes, Events, version } = require('discord.js');
+const { Client, Collection, GatewayIntentBits, MessageFlags, Routes, Events, Options, version } = require('discord.js');
 const db = require('./database');
 const { buildLeaderboard } = require('./utils/leaderboardView');
 const { loadEmojis } = require('./utils/emojis');
 const { startLiveUpdater } = require('./utils/liveUpdater');
 const { startPresence } = require('./utils/presence');
 const { startBio, setOfflineBio } = require('./utils/bio');
+const { startMemoryGuard } = require('./utils/memory');
+const { startUptime, saveUptime } = require('./utils/uptime');
+const { startBackups } = require('./utils/backup');
+const { autoRestoreFromChannel, startDiscordBackups } = require('./utils/discordBackup');
 
+// GuildMessages lets the bot see messages. Messages that @mention the bot include their
+// content even without the privileged Message Content intent, so nothing extra to enable.
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  // Keep discord.js caches small so memory doesn't creep up over weeks.
+  // The bot keeps its own user (needed to work) and fetches anything else on demand.
+  makeCache: Options.cacheWithLimits({
+    ...Options.DefaultMakeCacheSettings,
+    MessageManager: 10,
+    PresenceManager: 0,
+    ReactionManager: 0,
+    GuildMemberManager: { maxSize: 100, keepOverLimit: (m) => m.id === m.client.user?.id },
+    UserManager: { maxSize: 200, keepOverLimit: (u) => u.id === u.client.user?.id },
+  }),
 });
 
+// Load every command file in ./commands
 client.commands = new Collection();
 for (const file of fs.readdirSync(path.join(__dirname, 'commands')).filter((f) => f.endsWith('.js'))) {
   const command = require(path.join(__dirname, 'commands', file));
   client.commands.set(command.data.name, command);
 }
 
+// Registers slash commands every startup, so there's no separate "deploy" step to forget
 async function registerCommands() {
   const body = [...client.commands.values()].map((c) => c.data.toJSON());
   const { GUILD_ID } = process.env;
@@ -32,16 +50,23 @@ async function registerCommands() {
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag} (discord.js v${version})`);
   await registerCommands().catch((err) => console.error('[commands] Registration failed:', err.message));
-  await loadEmojis(client);
-  startBio(client);
-  startPresence(client);
-  startLiveUpdater(client);
+  await loadEmojis(client); // custom white button icons (Application Emojis)
+  await autoRestoreFromChannel(client); // brand-new empty database? pull the latest backup from Discord
+  startUptime(); // total active time, carried over restarts
+  startBackups(); // copy of the database every 2 days in data/backups
+  startDiscordBackups(client); // backup file posted to BACKUP_CHANNEL_ID every 2 days
+  startMemoryGuard(); // hourly [mem] log + periodic cleanup
+  startBio(client); // About Me: "Active for 52h 14m (since ...)"
+  startPresence(client); // green online dot + "Active for 52h 14m" status
+  startLiveUpdater(client); // refreshes /live leaderboards every minute
   console.log('Bot is ready.');
 });
 
+// ---- @mention the bot (just the mention, nothing else) -> show the leaderboard ----
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
 
+  // Content must be exactly "@Bot" so replies to the bot or normal chat never trigger it
   const mentionOnly = new RegExp(`^<@!?${client.user.id}>$`);
   if (!mentionOnly.test(message.content.trim())) return;
 
@@ -56,12 +81,14 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
+    // ---- Slash commands ----
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (command) await command.execute(interaction);
       return;
     }
 
+    // ---- Leaderboard buttons ----
     if (interaction.isButton() && interaction.customId.startsWith('lb_')) {
       const [action, pageStr] = interaction.customId.split(':');
       const page = parseInt(pageStr, 10) || 0;
@@ -80,6 +107,7 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply(await buildLeaderboard(client, page, guild));
       }
       if (action === 'lb_me') {
+        // Private (ephemeral) reply — only the clicker sees it
         const total = db.getUserTotal(interaction.user.id);
         const content =
           total === null
@@ -91,12 +119,14 @@ client.on('interactionCreate', async (interaction) => {
   } catch (err) {
     console.error(err);
     const msg = { content: 'Something went wrong.', flags: MessageFlags.Ephemeral };
-    if (interaction.deferred || interaction.replied) interaction.followUp(msg).catch(() => { });
-    else interaction.reply(msg).catch(() => { });
+    if (interaction.deferred || interaction.replied) interaction.followUp(msg).catch(() => {});
+    else interaction.reply(msg).catch(() => {});
   }
 });
 
+// On Ctrl+C / pm2 stop: mark the bio as offline, then exit cleanly
 async function shutdown() {
+  saveUptime();
   await Promise.race([setOfflineBio(client), new Promise((r) => setTimeout(r, 3000))]);
   client.destroy();
   process.exit(0);
