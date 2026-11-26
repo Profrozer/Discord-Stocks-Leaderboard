@@ -9,7 +9,8 @@
   <a href="#installation--setup">Setup</a> •
   <a href="#custom-emojis">Custom Emojis</a> •
   <a href="#commands--usage">Usage</a> •
-  <a href="#live-leaderboard">Live Mode</a>
+  <a href="#live-leaderboard">Live Mode</a> |
+  <a href="#backups-and-recovery">Backups</a>
 </p>
 
 ---
@@ -30,7 +31,8 @@ All currency is stored as integer cents in a fast SQLite database with Write-Ahe
 - **Interactive Navigation**: Prev, Next, Dynamic Page Indicator, Refresh, and private (ephemeral) "My Rank" check buttons.
 - **Self-Updating Live Leaderboards**: Set up an auto-updating channel message with `/live start` that refreshes every 60 seconds whenever spending changes.
 - **Bot Mention Trigger**: Simply send `@Bot` in any channel to view the leaderboard immediately.
-- **Live Presence & Bio**: Real-time bot uptime status displayed on its profile and Developer Portal bio.
+- **Persistent Active Time**: The bot's status and bio show cumulative running time across restarts.
+- **Backups & Recovery**: Automatic local SQLite snapshots, optional Discord JSON backups, and administrator-only restore.
 
 ---
 
@@ -49,8 +51,8 @@ All currency is stored as integer cents in a fast SQLite database with Write-Ahe
 
 ## Prerequisites
 
-- **Node.js**: v18.0.0 or higher
-- **npm** or **yarn** / **pnpm**
+- **Node.js 22 LTS** recommended. Node.js 18 is not supported by the current `better-sqlite3` release.
+- **npm**
 - A Discord Application created in the [Discord Developer Portal](https://discord.com/developers/applications)
 
 ---
@@ -67,36 +69,24 @@ npm install
 
 ### 2. Configure Environment Variables
 
-Create a `.env` file in the project root (refer to `env.example`):
+Copy [env.example](env.example) to `.env` in the project root. Set `DISCORD_TOKEN` from the Developer Portal and `CLIENT_ID` to the Application ID (`CLIENT_ID` is used by `npm run deploy`). Keep `.env` private and do not commit it.
 
-```ini
-# Discord Bot Token from Developer Portal
-DISCORD_TOKEN=your_bot_token_here
-
-# Client ID from Developer Portal (General Information)
-CLIENT_ID=your_client_id_here
-
-# (Optional) Test Guild ID for instant command registration during development
-GUILD_ID=
-
-# (Optional) Staff Role ID allowed to manage spending
-STAFF_ROLE_ID=
-
-# Store name displayed on the rendered leaderboard image
-SHOP_NAME=STOCKS LEADERBOARD
-
-# Timezone for timestamp display
-TIMEZONE=Asia/Kuala_Lumpur
-
-# Status text prefix for the bot's About Me bio
-BIO_TEXT=Leaderboard Ranking
-```
+| Variable | Purpose |
+|---|---|
+| `GUILD_ID` | Register commands in one server. Leave blank for global registration. |
+| `STAFF_ROLE_ID` | Allow a staff role to manage spending, live boards, and Discord backups. |
+| `SHOP_NAME` | Name displayed on the leaderboard image. |
+| `TIMEZONE` | Timezone for the leaderboard timestamp and the start date in the bot bio. |
+| `BIO_TEXT` | Text shown above the active-time counter in the bot bio. |
+| `BACKUP_CHANNEL_ID` | Private channel for Discord backups and automatic recovery. Leave blank to use local backups only. |
+| `BACKUP_EVERY_HOURS` | Hours between backups for both destinations. Default: `48`. |
+| `MEMORY_RESTART_MB` | Optional RSS limit in MB. Default: `0` (disabled). |
 
 ### 3. Configure Discord Bot Permissions
 
 In the [Discord Developer Portal](https://discord.com/developers/applications):
 
-1. Navigate to **Bot** -> Enable **Guilds** and **Guild Messages** intents.
+1. Create the bot in the **Bot** tab. The bot requests the Guilds and Guild Messages intents in code; no privileged Message Content intent is required.
 2. Under **OAuth2** -> **URL Generator**:
    - Scopes: `bot`, `applications.commands`
    - Permissions:
@@ -165,6 +155,37 @@ Create an automated, self-refreshing leaderboard in any announcement or shop cha
 
 ---
 
+## Backups and Recovery
+
+Both backup schedules are checked on startup and then hourly. Backups include spending totals, live leaderboard message references, and the active-time counter. A restore reverts those values to the time of the backup.
+
+### Local backups
+
+The bot keeps the 10 newest `shop-*.db` snapshots in `data/backups/` and refreshes `spending-export.json` alongside them. If `data/shop.db` is missing, empty, or corrupt, the bot tries to recover from the newest local snapshot before opening the database. Keep a copy off the host: local backups are lost if the host's disk is lost.
+
+### Discord backups
+
+1. Create a private backup channel. The JSON files contain Discord user IDs and spending totals.
+2. Enable Discord Developer Mode, copy the channel ID, and set `BACKUP_CHANNEL_ID` in `.env`. Give the bot **View Channel**, **Send Messages**, **Attach Files**, and **Read Message History** in that channel.
+3. Restart the bot and run `/backup`. Once there is spending data, confirm that a `shop-backup-*.json` attachment appears. Empty leaderboards are not posted.
+
+`/backup` is available to administrators and the configured staff role. The bot attempts to keep its 10 most recent backup posts in the channel. Download a copy periodically in case both the host and channel become unavailable.
+
+### Move to a new host or restore manually
+
+1. Stop the old bot if it is still running. Deploy `src/`, `package.json`, and the lockfile if available, and configure `.env` securely on the new host. Install dependencies there rather than uploading `node_modules/`.
+2. For automatic Discord recovery, start without a `data/` folder and use the same bot account and `BACKUP_CHANNEL_ID`. On first startup, the bot looks for its own newest backup in the channel. Check for `[backup] Fresh database: restored` in the logs. Do not copy a stale local `data/` folder. If the old host's current data is available, you can instead stop it cleanly and copy its entire `data/` folder.
+3. If auto-restore did not run or the old channel is gone, start the bot and run `/restore file:<backup.json>` as a server administrator. Attach a saved `shop-backup-*.json` or a `spending-export.json` from the current backup format. Do not upload the JSON to the server or attach a `.db` file. The command replaces current data after saving a `data/backups/before-restore-*.db` snapshot.
+4. Verify the totals with `/leaderboard`. If the old backup channel is gone, configure a new `BACKUP_CHANNEL_ID`, restart, and run `/backup` to verify the new destination.
+
+## Active Time and Memory
+
+- The bot saves cumulative running time every minute and on clean shutdown. Offline time is not counted. A restore resumes the counter from the backup's saved value.
+- Discord caches are capped and the bot attempts garbage collection periodically. The first `[mem]` log appears after about a minute, followed by hourly logs of RSS, heap, and external memory.
+- If `MEMORY_RESTART_MB` is set to a positive value, the bot exits with code `1` when a memory check finds RSS above that limit. Enable it only if your host or process manager is configured to restart the bot after a failure.
+
+---
+
 ## Starting the Bot
 
 ### Development Mode
@@ -186,6 +207,12 @@ Commands register automatically upon bot startup. For manual re-deployment:
 ```bash
 npm run deploy
 ```
+
+---
+
+## Hosted Install Troubleshooting
+
+If npm reports that it blocked `better-sqlite3`'s install script and the bot then reports `Could not locate the bindings file`, deploy the current `package.json`. It explicitly allows the `better-sqlite3` install script via `allowScripts`. On the affected host, stop the bot, remove only `node_modules/`, and reinstall with `npm install` (or let the host reinstall on startup). Leave `.env` and `data/` in place.
 
 ---
 
